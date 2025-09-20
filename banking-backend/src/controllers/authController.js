@@ -1,74 +1,51 @@
-// src/controllers/authController.js
-import Joi from 'joi';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import Account from '../models/Account.js';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const registerSchema = Joi.object({
-  name: Joi.string().min(2).max(100).required(),
-  email: Joi.string().email().required(),
-  password: Joi.string().min(6).required(),
-  inviteCode: Joi.string().optional() // 👈 allow optional inviteCode
-});
+function signToken(user) {
+  return jwt.sign({ id: user._id.toString(), role: user.role }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXP || '7d' });
+}
 
-const loginSchema = Joi.object({
-  email: Joi.string().email().required(),
-  password: Joi.string().required()
-});
+export const register = async (req, res) => {
+  try {
+    const { name, email, password, inviteCode } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ ok: false, message: 'Missing fields' });
+    const exists = await User.findOne({ email });
+    if (exists) return res.status(400).json({ ok: false, message: 'Email already exists' });
+    const role = inviteCode === 'admin_role' ? 'admin' : 'customer';
+    const user = await User.create({ name, email, password, role });
 
-export async function register(req, res) {
-  const { error, value } = registerSchema.validate(req.body);
-  if (error) return res.status(400).json({ error: error.message });
+    // create a primary account for the user
+    const accountNumber = Math.random().toString(36).slice(2,14);
+    const account = await Account.create({ userId: user._id, accountNumber, type: 'SAV', balance: 0 });
 
-  const { name, email, password, inviteCode } = value;
-  const existing = await User.findOne({ email });
-  if (existing) return res.status(409).json({ error: 'Email already in use' });
-
-  // 👇 decide role based on inviteCode
-  let role = 'customer';
-  if (inviteCode && process.env.ADMIN_INVITE_CODE) {
-    if (inviteCode === process.env.ADMIN_INVITE_CODE) {
-      role = 'admin';
-    } else {
-      return res.status(403).json({ error: 'Invalid invite code' });
-    }
+    res.status(201).json({
+      ok: true,
+      token: signToken(user),
+      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      accountId: account._id
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
   }
+};
 
-  const salt = await bcrypt.genSalt(10);
-  const passwordHash = await bcrypt.hash(password, salt);
-  const user = await User.create({ name, email, passwordHash, role });
-
-  const payload = { id: user._id, role: user.role };
-  const token = jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
-  });
-
-  res.status(201).json({
-    ok: true,
-    token,
-    user: { id: user._id, name: user.name, email: user.email, role: user.role }
-  });
-}
-
-export async function login(req, res) {
-  const { error, value } = loginSchema.validate(req.body);
-  if (error) return res.status(400).json({ error: error.message });
-
-  const { email, password } = value;
-  const user = await User.findOne({ email });
-  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-
-  const match = await bcrypt.compare(password, user.passwordHash);
-  if (!match) return res.status(401).json({ error: 'Invalid credentials' });
-
-  const payload = { id: user._id, role: user.role };
-  const token = jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
-  });
-
-  res.json({
-    ok: true,
-    token,
-    user: { id: user._id, name: user.name, email: user.email, role: user.role }
-  });
-}
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ ok: false, message: 'Missing fields' });
+    const user = await User.findOne({ email });
+    if (!user) return res.status(401).json({ ok: false, message: 'Invalid credentials' });
+    const match = await user.comparePassword(password);
+    if (!match) return res.status(401).json({ ok: false, message: 'Invalid credentials' });
+    res.json({
+      ok: true,
+      token: signToken(user),
+      user: { id: user._id, name: user.name, email: user.email, role: user.role }
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+};

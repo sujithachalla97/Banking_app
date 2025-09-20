@@ -1,12 +1,17 @@
-// src/routes/account.js
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.js';
-import { createAccount, getMyAccounts, getAccountById } from '../controllers/accountController.js';
+import { 
+  createAccount, 
+  getMyAccounts, 
+  getAccountById, 
+  checkBalance        // ✅ make sure to import this
+} from '../controllers/accountController.js';
 
 const router = express.Router();
 
-router.post('/', authMiddleware, createAccount);       // Create account
-router.get('/', authMiddleware, getMyAccounts);        // My accounts
-router.get('/:id', authMiddleware, getAccountById);    // Account details
+router.post('/', authMiddleware, createAccount);          // Create account
+router.get('/', authMiddleware, getMyAccounts);           // My accounts
+router.get('/:id', authMiddleware, getAccountById);       // Account details
+router.get('/:accountId/balance', authMiddleware, checkBalance); // ✅ balance route protected
 
 export default router;

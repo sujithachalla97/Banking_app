@@ -8,7 +8,7 @@ import { authMiddleware } from './middleware/auth.js';
 import accountRoutes from './routes/account.js';
 import customerProfileRoutes from './routes/customerProfile.js';
 import transactionRoutes from './routes/transaction.js';
-
+import goalRoutes from './routes/goals.js';
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -19,7 +19,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/profile', customerProfileRoutes);
 app.use('/api/tx', transactionRoutes);
-
+app.use('/api/goals', goalRoutes);
 
 // Health check
 app.get('/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
