@@ -7,7 +7,8 @@ import User from '../models/User.js';
 const registerSchema = Joi.object({
   name: Joi.string().min(2).max(100).required(),
   email: Joi.string().email().required(),
-  password: Joi.string().min(6).required()
+  password: Joi.string().min(6).required(),
+  inviteCode: Joi.string().optional() // 👈 allow optional inviteCode
 });
 
 const loginSchema = Joi.object({
@@ -19,13 +20,23 @@ export async function register(req, res) {
   const { error, value } = registerSchema.validate(req.body);
   if (error) return res.status(400).json({ error: error.message });
 
-  const { name, email, password } = value;
+  const { name, email, password, inviteCode } = value;
   const existing = await User.findOne({ email });
   if (existing) return res.status(409).json({ error: 'Email already in use' });
 
+  // 👇 decide role based on inviteCode
+  let role = 'customer';
+  if (inviteCode && process.env.ADMIN_INVITE_CODE) {
+    if (inviteCode === process.env.ADMIN_INVITE_CODE) {
+      role = 'admin';
+    } else {
+      return res.status(403).json({ error: 'Invalid invite code' });
+    }
+  }
+
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(password, salt);
-  const user = await User.create({ name, email, passwordHash });
+  const user = await User.create({ name, email, passwordHash, role });
 
   const payload = { id: user._id, role: user.role };
   const token = jwt.sign(payload, process.env.JWT_SECRET, {
