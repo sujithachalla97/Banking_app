@@ -1,6 +1,6 @@
 // src/middleware/auth.js
 import jwt from 'jsonwebtoken';// src/middleware/auth.js
-import jwt from 'jsonwebtoken';
+
 
 /**
  * Auth middleware: verifies JWT and attaches user payload.
